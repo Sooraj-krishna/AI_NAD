@@ -1,0 +1,27 @@
+{
+  "name": "ai-nad",
+  "version": "1.0.0",
+  "description": "AI-NAD: Autonomous AI Software Factory",
+  "main": "index.js",
+  "scripts": {
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd frontend && npm run dev",
+    "build:backend": "cd backend && npm run build",
+    "build:frontend": "cd frontend && npm run build",
+    "install:all": "npm install && cd backend && npm install && cd ../frontend && npm install"
+  },
+  "keywords": [
+    "ai",
+    "code-generation",
+    "autonomous"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "typescript": "^5.3.3"
+  },
+  "dependencies": {
+    "zod": "^4.3.6"
+  }
+}

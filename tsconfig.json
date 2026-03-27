@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "commonjs",
+    "lib": ["ES2020"],
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "moduleResolution": "node",
+    "baseUrl": ".",
+    "paths": {
+      "@backend/*": ["backend/src/*"],
+      "@agents/*": ["agents/*"]
+    },
+    "typeRoots": ["./node_modules/@types", "./backend/node_modules/@types"]
+  },
+  "include": ["agents/**/*", "backend/src/**/*"],
+  "exclude": ["node_modules", "**/node_modules", "backend/dist", "frontend"]
+}

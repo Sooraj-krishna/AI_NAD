@@ -1,0 +1,70 @@
+.architecture-preview {
+  margin-top: 2rem;
+  padding: 1.5rem;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border: 1px solid #e0e0e0;
+}
+
+.architecture-preview h3 {
+  color: #333;
+  margin-bottom: 1rem;
+  font-size: 1.5rem;
+}
+
+.architecture-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1.5rem;
+}
+
+.arch-section {
+  background: white;
+  padding: 1rem;
+  border-radius: 8px;
+  border: 1px solid #e0e0e0;
+}
+
+.arch-section h4 {
+  color: #667eea;
+  margin-bottom: 0.75rem;
+  font-size: 1.1rem;
+}
+
+.arch-section ul {
+  list-style: none;
+  padding: 0;
+}
+
+.arch-section li {
+  padding: 0.5rem 0;
+  border-bottom: 1px solid #f0f0f0;
+  color: #555;
+}
+
+.arch-section li:last-child {
+  border-bottom: none;
+}
+
+.arch-section code {
+  background: #667eea;
+  color: white;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.85em;
+  font-weight: 600;
+  margin-right: 0.5rem;
+}
+
+.endpoint-desc {
+  color: #888;
+  font-size: 0.9em;
+}
+
+.table-columns {
+  color: #888;
+  font-size: 0.9em;
+  margin-left: 0.5rem;
+}
+
+
