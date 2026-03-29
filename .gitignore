@@ -5,6 +5,8 @@ build/
 .env.local
 *.log
 .DS_Store
+backend/generated-projects/*
+!backend/generated-projects/.gitkeep
 generated-projects/*
 !generated-projects/.gitkeep
 
