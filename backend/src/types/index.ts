@@ -48,7 +48,28 @@ export interface ArchitectureOutput {
   folder_structure: FolderStructure;
   api_endpoints: ApiEndpoint[];
   database_schema: DatabaseSchema;
+  services: string[];
+  workflows: Workflow[];
   security_features?: string[];
+  design_system?: DesignSystem;
+}
+
+export interface DesignSystem {
+  colors: {
+    primary: string;    // HSL or Hex
+    secondary: string;
+    background: string;
+    surface: string;
+    accent: string;
+  };
+  typography: {
+    font_family: string;
+    base_size: string;
+  };
+  effects: {
+    glassmorphism: boolean;
+    border_radius: string;
+  };
 }
 
 export interface FolderStructure {

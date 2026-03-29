@@ -27,13 +27,16 @@ export class ValidationAgent {
           })));
         }
 
-        const syntaxIssues = this.checkSyntax(content, file.path);
-        if (syntaxIssues.length > 0) {
-          errors.push(...syntaxIssues.map(issue => ({
+        const syntaxResults = this.checkSyntax(content, file.path);
+        if (syntaxResults.errors.length > 0) {
+          errors.push(...syntaxResults.errors.map(msg => ({
             file: file.path,
-            message: issue,
+            message: msg,
             type: 'syntax' as const
           })));
+        }
+        if (syntaxResults.warnings.length > 0) {
+          warnings.push(...syntaxResults.warnings);
         }
 
         const depIssues = this.checkDependencies(content);
@@ -45,6 +48,8 @@ export class ValidationAgent {
       // 2. Native Validation (tsc)
       Logger.info('🚀 Running native validation with tsc...');
       const nativeErrors = await this.runNativeValidation(projectPath);
+      
+      // Filter out 'any' errors from native validation if any (though tsc usually doesn't literal "any type detected" unless configured)
       errors.push(...nativeErrors);
 
       const valid = errors.length === 0;
@@ -77,7 +82,6 @@ export class ValidationAgent {
     try {
       const backendPath = path.join(projectPath, 'backend');
       
-      // Attempt to run tsc --noEmit
       try {
         await execAsync('npx tsc --noEmit', { cwd: backendPath });
       } catch (err: any) {
@@ -89,13 +93,11 @@ export class ValidationAgent {
               if (matches) {
                 const [_, file, lineNum, col, code, message] = matches;
                 
-                // Heuristic: If it's a "Cannot find module" error, check if it's local
                 if (code === '2307') {
                   const moduleMatch = message.match(/Cannot find module '([^']+)'/);
                   if (moduleMatch) {
                     const moduleName = moduleMatch[1];
                     if (moduleName.startsWith('.')) {
-                      // CRITICAL: Missing local module
                       errors.push({
                         file: file.trim(),
                         message: `CRITICAL: Local module not found: ${moduleName}. Ensure the file exists and the path is correct.`,
@@ -103,7 +105,6 @@ export class ValidationAgent {
                       });
                       continue; 
                     } else {
-                      // External module: skip if we haven't run npm install
                       continue;
                     }
                   }
@@ -115,7 +116,6 @@ export class ValidationAgent {
                   type: 'syntax'
                 });
               } else if (line.includes(': error TS')) {
-                // Fallback for different tsc output formats
                 errors.push({
                   file: line.split(':')[0].trim(),
                   message: line.substring(line.indexOf(': error TS') + 2),
@@ -150,36 +150,35 @@ export class ValidationAgent {
     return issues;
   }
 
-  private checkSyntax(content: string, filePath: string): string[] {
-    const issues: string[] = [];
+  private checkSyntax(content: string, filePath: string): { errors: string[], warnings: string[] } {
+    const errors: string[] = [];
+    const warnings: string[] = [];
 
-    // Basic syntax checks
     const openBraces = (content.match(/{/g) || []).length;
     const closeBraces = (content.match(/}/g) || []).length;
     if (openBraces !== closeBraces) {
-      issues.push('Mismatched braces');
+      errors.push('Mismatched braces');
     }
 
     const openParens = (content.match(/\(/g) || []).length;
     const closeParens = (content.match(/\)/g) || []).length;
     if (openParens !== closeParens) {
-      issues.push('Mismatched parentheses');
+      errors.push('Mismatched parentheses');
     }
 
-    // Check for common TypeScript/React issues
     if (filePath.endsWith('.tsx') || filePath.endsWith('.ts')) {
-      if (content.includes('any') && !content.includes('// eslint-disable')) {
-        issues.push('Use of "any" type detected - consider using explicit types');
+      if (content.includes(': any') || content.includes('<any>') || content.includes('as any')) {
+        if (!content.includes('// eslint-disable')) {
+          warnings.push(`Use of "any" type detected in ${filePath} - consider using explicit types`);
+        }
       }
     }
 
-    return issues;
+    return { errors, warnings };
   }
 
   private checkDependencies(content: string): string[] {
     const warnings: string[] = [];
-    
-    // Check for potentially outdated or insecure dependencies
     const deprecatedPatterns = [
       { pattern: /require\(['"]request['"]\)/, message: 'request package is deprecated' }
     ];

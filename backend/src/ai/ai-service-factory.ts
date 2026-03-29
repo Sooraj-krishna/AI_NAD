@@ -19,7 +19,7 @@ export class AIServiceFactory {
       const model = process.env.GEMINI_MODEL;
       return new GeminiService(apiKey, model);
     } else {
-      const model = process.env.OLLAMA_MODEL || 'deepseek-coder';
+      const model = process.env.OLLAMA_MODEL || 'gemma2:2b';
       const baseUrl = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
       return new OllamaService(model, baseUrl);
     }
