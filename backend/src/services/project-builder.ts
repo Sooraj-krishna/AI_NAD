@@ -43,7 +43,7 @@ export class ProjectBuilder {
       await this.writeTestFiles(projectPath, context.tests);
     }
 
-    // Create package.json files — pass generated code so we can scan for imports
+    // Create package.json files
     await this.createPackageFiles(
       projectPath,
       context.architecture,
@@ -74,18 +74,11 @@ export class ProjectBuilder {
     const backendPath = path.join(projectPath, 'backend');
 
     for (const file of code.backend) {
-      // Skip AI-generated package.json — project-builder manages that itself
       if (file.path === 'package.json' || file.path.endsWith('/package.json')) continue;
 
       const filePath = path.join(backendPath, file.path);
       await fs.ensureDir(path.dirname(filePath));
       await fs.writeFile(filePath, this.normaliseContent(file.content), 'utf-8');
-    }
-
-    // Create main server file if it doesn't exist
-    const serverPath = path.join(backendPath, 'src', 'index.ts');
-    if (!await fs.pathExists(serverPath)) {
-      await fs.writeFile(serverPath, this.generateServerFile(architecture), 'utf-8');
     }
   }
 
@@ -97,7 +90,6 @@ export class ProjectBuilder {
     const frontendPath = path.join(projectPath, 'frontend');
 
     for (const file of code.frontend) {
-      // Skip AI-generated package.json — project-builder manages that itself
       if (file.path === 'package.json' || file.path.endsWith('/package.json')) continue;
 
       const filePath = path.join(frontendPath, file.path);
@@ -105,13 +97,7 @@ export class ProjectBuilder {
       await fs.writeFile(filePath, this.normaliseContent(file.content), 'utf-8');
     }
 
-    // Create main entry file if it doesn't exist
-    const mainPath = path.join(frontendPath, 'src', 'main.tsx');
-    if (!await fs.pathExists(mainPath)) {
-      await fs.writeFile(mainPath, this.generateMainFile(), 'utf-8');
-    }
-
-    // Create index.html
+    // Create index.html if it doesn't exist
     const indexPath = path.join(frontendPath, 'index.html');
     if (!await fs.pathExists(indexPath)) {
       await fs.writeFile(indexPath, this.generateIndexHTML(), 'utf-8');
@@ -132,11 +118,9 @@ export class ProjectBuilder {
     backendFiles: FileContent[] = [],
     frontendFiles: FileContent[] = []
   ): Promise<void> {
-    // --- Scan generated code for missing imports ---
     const scannedBackendDeps = this.scanImportsForPackages(backendFiles, 'backend');
     const scannedFrontendDeps = this.scanImportsForPackages(frontendFiles, 'frontend');
 
-    // --- Merge any ai-generated package.json files ---
     const aiBackendPkg = this.extractAiPackageJson(backendFiles);
     const aiFrontendPkg = this.extractAiPackageJson(frontendFiles);
 
@@ -171,8 +155,6 @@ export class ProjectBuilder {
       }
     };
 
-    Logger.info(`📦 Backend deps auto-detected: ${Object.keys(scannedBackendDeps.dependencies).join(', ') || 'none'}`);
-
     await fs.writeFile(
       path.join(projectPath, 'backend', 'package.json'),
       JSON.stringify(backendPackage, null, 2),
@@ -193,6 +175,7 @@ export class ProjectBuilder {
         react: '^18.2.0',
         'react-dom': '^18.2.0',
         axios: '^1.6.2',
+        'react-router-dom': '^6.21.1',
         ...scannedFrontendDeps.dependencies,
         ...(aiFrontendPkg?.dependencies || {})
       },
@@ -207,8 +190,6 @@ export class ProjectBuilder {
       }
     };
 
-    Logger.info(`📦 Frontend deps auto-detected: ${Object.keys(scannedFrontendDeps.dependencies).join(', ') || 'none'}`);
-
     await fs.writeFile(
       path.join(projectPath, 'frontend', 'package.json'),
       JSON.stringify(frontendPackage, null, 2),
@@ -216,15 +197,10 @@ export class ProjectBuilder {
     );
   }
 
-  /**
-   * Scans generated source files for bare import/require statements and maps
-   * them to known npm package versions using a curated dependency map.
-   */
   private scanImportsForPackages(
     files: FileContent[],
     context: 'backend' | 'frontend'
   ): { dependencies: Record<string, string>; devDependencies: Record<string, string> } {
-    // Node.js built-ins — never add these to package.json
     const nodeBuiltins = new Set([
       'fs', 'path', 'crypto', 'http', 'https', 'os', 'url', 'util', 'events',
       'stream', 'buffer', 'child_process', 'cluster', 'dns', 'net', 'tls',
@@ -232,10 +208,7 @@ export class ProjectBuilder {
       'timers', 'tty', 'worker_threads', 'v8', 'perf_hooks', 'async_hooks'
     ]);
 
-    // Curated map: package name → { version, devVersion?, type }
-    //   type = 'dep' | 'devDep' | 'both'
     const depMap: Record<string, { version: string; devVersion?: string; type: 'dep' | 'devDep' | 'both' }> = {
-      // Auth & security
       'bcrypt':           { version: '^5.1.1',   devVersion: '^5.0.2',  type: 'both' },
       'bcryptjs':         { version: '^2.4.3',                           type: 'dep' },
       'jsonwebtoken':     { version: '^9.0.2',   devVersion: '^9.0.5',  type: 'both' },
@@ -244,8 +217,9 @@ export class ProjectBuilder {
       'passport-jwt':     { version: '^4.0.1',                           type: 'dep' },
       'helmet':           { version: '^7.1.0',                           type: 'dep' },
       'express-rate-limit': { version: '^7.1.5',                         type: 'dep' },
-      // Database
       'pg':               { version: '^8.11.3',  devVersion: '^8.10.9', type: 'both' },
+      'firebase-admin':   { version: '^12.0.0',                          type: 'dep' },
+      'firebase':         { version: '^10.7.1',                          type: 'dep' },
       'mysql2':           { version: '^3.6.5',                           type: 'dep' },
       'mongoose':         { version: '^8.0.3',                           type: 'dep' },
       'sequelize':        { version: '^6.35.2',                          type: 'dep' },
@@ -254,11 +228,9 @@ export class ProjectBuilder {
       '@prisma/client':   { version: '^5.7.1',                           type: 'dep' },
       'redis':            { version: '^4.6.12',                          type: 'dep' },
       'ioredis':          { version: '^5.3.2',                           type: 'dep' },
-      // File handling
       'multer':           { version: '^1.4.5-lts.1', devVersion: '^1.4.11', type: 'both' },
       'sharp':            { version: '^0.33.2',                          type: 'dep' },
       'fs-extra':         { version: '^11.2.0',  devVersion: '^11.0.0', type: 'both' },
-      // Utilities
       'uuid':             { version: '^9.0.1',   devVersion: '^9.0.7',  type: 'both' },
       'lodash':           { version: '^4.17.21', devVersion: '^4.14.202', type: 'both' },
       'date-fns':         { version: '^3.3.1',                           type: 'dep' },
@@ -266,20 +238,16 @@ export class ProjectBuilder {
       'zod':              { version: '^3.22.4',                          type: 'dep' },
       'joi':              { version: '^17.12.0',                         type: 'dep' },
       'class-validator':  { version: '^0.14.1',                          type: 'dep' },
-      // Networking / Real-time
       'axios':            { version: '^1.6.2',                           type: 'dep' },
       'socket.io':        { version: '^4.6.1',                           type: 'dep' },
       'socket.io-client': { version: '^4.6.1',                           type: 'dep' },
       'ws':               { version: '^8.16.0',  devVersion: '^8.18.0', type: 'both' },
       'node-fetch':       { version: '^3.3.2',                           type: 'dep' },
-      // Email
       'nodemailer':       { version: '^6.9.8',   devVersion: '^6.9.8',  type: 'both' },
-      // Middleware
       'morgan':           { version: '^1.10.0',  devVersion: '^1.9.1',  type: 'both' },
       'compression':      { version: '^1.7.4',   devVersion: '^1.7.4',  type: 'both' },
       'express-validator': { version: '^7.0.1',                          type: 'dep' },
       'express-async-handler': { version: '^1.2.0',                      type: 'dep' },
-      // Frontend — React ecosystem
       'react-router-dom': { version: '^6.21.1',  devVersion: '^5.3.3',  type: 'both' },
       'zustand':          { version: '^4.4.7',                           type: 'dep' },
       '@tanstack/react-query': { version: '^5.17.9',                      type: 'dep' },
@@ -292,13 +260,11 @@ export class ProjectBuilder {
       'lucide-react':     { version: '^0.323.0',                         type: 'dep' },
       'clsx':             { version: '^2.1.0',                           type: 'dep' },
       'tailwind-merge':   { version: '^2.2.1',                           type: 'dep' },
-      // CSS-in-JS / Styling
       'styled-components': { version: '^6.1.8',                          type: 'dep' },
       '@emotion/react':   { version: '^11.11.3',                         type: 'dep' },
       '@emotion/styled':  { version: '^11.11.0',                         type: 'dep' },
     };
 
-    // Type-def-only packages (@types/*) that some imports pull in via a scoped name
     const typeOnlyMap: Record<string, Record<string, string>> = {
       'bcrypt':       { '@types/bcrypt': '^5.0.2' },
       'bcryptjs':     { '@types/bcryptjs': '^2.4.6' },
@@ -321,24 +287,18 @@ export class ProjectBuilder {
     const foundDeps: Record<string, string> = {};
     const foundDevDeps: Record<string, string> = {};
 
-    // Regex to extract bare package names from import/require statements
     const importRegex = /(?:import\s+(?:[^'"]+\s+from\s+)?['"]([^'"]+)['"]|require\s*\(\s*['"]([^'"]+)['"]\s*\))/g;
 
     for (const file of files) {
-      // Skip AI-generated package.json files (handled separately)
       if (file.path === 'package.json') continue;
-      // Only scan TS/JS source files
       if (!/\.(ts|tsx|js|jsx|mjs)$/.test(file.path)) continue;
 
       let match: RegExpExecArray | null;
       while ((match = importRegex.exec(file.content)) !== null) {
         const rawPkg = (match[1] || match[2] || '').trim();
         if (!rawPkg) continue;
-
-        // Strip relative imports
         if (rawPkg.startsWith('.')) continue;
 
-        // Extract bare package name (handles scoped packages like @org/pkg)
         const pkgName = rawPkg.startsWith('@')
           ? rawPkg.split('/').slice(0, 2).join('/')
           : rawPkg.split('/')[0];
@@ -346,7 +306,7 @@ export class ProjectBuilder {
         if (!pkgName || nodeBuiltins.has(pkgName)) continue;
 
         const entry = depMap[pkgName];
-        if (!entry) continue; // Unknown package — skip (we won't add untrusted dep versions)
+        if (!entry) continue;
 
         if (entry.type === 'dep' || entry.type === 'both') {
           foundDeps[pkgName] = entry.version;
@@ -354,22 +314,16 @@ export class ProjectBuilder {
           foundDevDeps[pkgName] = entry.version;
         }
 
-        // Add corresponding @types/* if available
         if (typeOnlyMap[pkgName]) {
           Object.assign(foundDevDeps, typeOnlyMap[pkgName]);
         }
       }
-      // Reset regex lastIndex for next file
       importRegex.lastIndex = 0;
     }
 
     return { dependencies: foundDeps, devDependencies: foundDevDeps };
   }
 
-  /**
-   * If the AI included a package.json in its generated file list, parse and return it.
-   * Returns null if none found or if parsing fails.
-   */
   private extractAiPackageJson(files: FileContent[]): { dependencies?: Record<string, string>; devDependencies?: Record<string, string> } | null {
     const pkgFile = files.find(f => f.path === 'package.json' || f.path.endsWith('/package.json'));
     if (!pkgFile) return null;
@@ -380,7 +334,6 @@ export class ProjectBuilder {
         devDependencies: parsed.devDependencies || {}
       };
     } catch {
-      Logger.warn('⚠️ Could not parse AI-generated package.json, ignoring it');
       return null;
     }
   }
@@ -389,7 +342,6 @@ export class ProjectBuilder {
     projectPath: string,
     architecture: ArchitectureOutput
   ): Promise<void> {
-    // Backend tsconfig.json
     const backendTsconfig = {
       compilerOptions: {
         target: 'ES2020',
@@ -414,7 +366,6 @@ export class ProjectBuilder {
       'utf-8'
     );
 
-    // Frontend tsconfig.json
     const frontendTsconfig = {
       compilerOptions: {
         target: 'ES2020',
@@ -440,7 +391,6 @@ export class ProjectBuilder {
       'utf-8'
     );
 
-    // Frontend tsconfig.node.json — required by Vite; tsconfig.json references it
     const frontendTsconfigNode = {
       compilerOptions: {
         composite: true,
@@ -459,7 +409,6 @@ export class ProjectBuilder {
       'utf-8'
     );
 
-    // Frontend vite.config.ts
     const viteConfig = `import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
@@ -550,54 +499,9 @@ ${context.architecture?.api_endpoints.map(e => `- ${e.method} ${e.path}: ${e.des
 ## Database
 
 See \`database/schema.sql\` for database schema.
-
-## Validation
-
-${context.validation?.valid ? '✅ Code validation passed' : '⚠️ Code validation found issues'}
-${context.validation?.errors.length ? `\nErrors: ${context.validation.errors.length}` : ''}
-${context.validation?.warnings.length ? `\nWarnings: ${context.validation.warnings.length}` : ''}
 `;
 
     await fs.writeFile(path.join(projectPath, 'README.md'), readme, 'utf-8');
-  }
-
-  private generateServerFile(architecture: ArchitectureOutput): string {
-    return `import express from 'express';
-import cors from 'cors';
-import dotenv from 'dotenv';
-import routes from './routes';
-
-dotenv.config();
-
-const app = express();
-const PORT = process.env.PORT || 5001;
-
-app.use(cors());
-app.use(express.json());
-app.use('/api', routes);
-
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok' });
-});
-
-app.listen(PORT, () => {
-  console.log(\`Server running on port \${PORT}\`);
-});
-`;
-  }
-
-  private generateMainFile(): string {
-    return `import React from 'react';
-import ReactDOM from 'react-dom/client';
-import App from './components/App';
-import './index.css';
-
-ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
-);
-`;
   }
 
   private generateIndexHTML(): string {
@@ -617,7 +521,6 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
   }
 
   private generateProjectName(prompt: string): string {
-    // Extract a simple project name from the prompt
     const words = prompt.toLowerCase().split(/\s+/);
     const filtered = words.filter(w =>
       !['create', 'build', 'make', 'generate', 'a', 'an', 'the', 'with', 'and', 'or'].includes(w)
@@ -625,16 +528,9 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     return filtered.slice(0, 3).join('-') || 'generated-project';
   }
 
-  /**
-   * Ensures file content is always a string before writing.
-   * The AI sometimes returns package.json content as a parsed JSON object
-   * rather than a raw string, which causes fs.writeFile to throw ERR_INVALID_ARG_TYPE.
-   */
   private normaliseContent(content: unknown): string {
     if (typeof content === 'string') return content;
     if (content === null || content === undefined) return '';
     return JSON.stringify(content, null, 2);
   }
 }
-
-

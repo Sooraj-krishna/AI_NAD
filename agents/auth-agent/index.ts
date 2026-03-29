@@ -11,7 +11,10 @@ export class FirebaseAuthAgent {
 
   async process(intent: IntentOutput, architecture: ArchitectureOutput): Promise<AgentResponse<FileContent[]>> {
     try {
-      if (!intent.authentication || !architecture.architecture.database.includes('Firebase')) {
+      const isFirebase = architecture?.architecture?.database?.includes('Firebase') || false;
+      const isAuthRequested = intent?.authentication || false;
+
+      if (!isAuthRequested || !isFirebase) {
         return { success: true, data: [] };
       }
 
